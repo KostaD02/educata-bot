@@ -1,21 +1,49 @@
 const util = {
-  production: true,
+  silent: false,
   tags: [
     {
       prefix: "[ARTICLE]",
       label: "article request",
+      showForTemplate: true,
     },
     {
       prefix: "[FEATURE]",
       label: "enhancement",
+      showForTemplate: true,
     },
     {
       prefix: "[BUG]",
       label: "bug",
+      showForTemplate: true,
+    },
+    {
+      prefix: "[DOC]",
+      label: "documentation",
+      showForTemplate: true,
+    },
+    {
+      prefix: "[DUPLICATE]",
+      label: "duplicate",
+      showForTemplate: false,
+    },
+    {
+      prefix: "[EDIT]",
+      label: "editing article",
+      showForTemplate: true,
+    },
+    {
+      prefix: "[HELP]",
+      label: "help wanted",
+      showForTemplate: true,
+    },
+    {
+      prefix: "[INVALID]",
+      label: "invalid",
+      showForTemplate: false,
     },
   ],
   getName(contributor) {
-    return `${this.production ? "@" : ""}${contributor}`;
+    return `${this.silent ? "" : "@"}${contributor}`;
   },
 };
 
@@ -36,15 +64,23 @@ export default (app) => {
     if (!tag) {
       await context.octokit.issues.createComment(
         context.issue({
-          body: `❌ Issue-ს აუცილებლად უნდა გააჩნდეს პრეფიქსი: ${util.tags
-            .map((tag) => `**${tag.prefix}**`)
+          body: `${
+            context.payload.issue.body
+              ? ""
+              : "❌ Issue-ს აუცილებლად უნდა გააჩნდეს კონტენტი!\n"
+          }❌ Issue-ს აუცილებლად უნდა გააჩნდეს რომელიმე პრეფიქსი:\n${util.tags
+            .filter((tag) => tag.showForTemplate)
+            .sort((a, b) => a.prefix.length - b.prefix.length)
+            .map((tag) => `- ${tag.prefix}`)
             .join(
-              " ან "
-            )}. გამოიყენეთ [template](https://github.com/educata/iswavle/issues/new/choose).`,
+              "\n"
+            )}\n\nგამოიყენეთ [template](https://github.com/educata/iswavle/issues/new/choose).`,
         })
       );
 
-      await context.octokit.issues.update(context.issue({ state: "closed" }));
+      await context.octokit.issues.update(
+        context.issue({ state: "closed", labels: ["invalid"] })
+      );
       return;
     }
 
@@ -52,6 +88,18 @@ export default (app) => {
       await context.octokit.issues.createComment(
         context.issue({
           body: "❌ შეავსეთ ინფორმაცია, უკეთესი სტრუქტურისთვის გამოიყენეთ [template](https://github.com/educata/iswavle/issues/new/choose).",
+          labels: ["invalid"],
+        })
+      );
+      await context.octokit.issues.update(context.issue({ state: "closed" }));
+      return;
+    }
+
+    if (context.payload.issue.title.trim() === tag.prefix) {
+      await context.octokit.issues.createComment(
+        context.issue({
+          body: "❌ სათაური არ შეიძლება იყოს მხოლოდ პრეფიქსი.",
+          labels: ["invalid"],
         })
       );
       await context.octokit.issues.update(context.issue({ state: "closed" }));
@@ -62,9 +110,8 @@ export default (app) => {
       body: `მადლობა Issue-ს შექმნისთვის 🎉 ${KOSTA} და ${PRIDON} მალე გიპასუხებენ 🤟`,
     });
     await context.octokit.issues.createComment(issueComment);
-    console.log(context.payload.issue);
 
-    if (context.payload.issue.assignees.length === 0) {
+    if (context.payload.issue.assignees.length === 0 && !util.silent) {
       await context.octokit.issues.addAssignees(
         context.issue({ assignees: CODE_OWNERS })
       );
